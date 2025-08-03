@@ -10,15 +10,26 @@ from fastapi.responses import HTMLResponse
 
 from app.api import upload, result
 from app.core.config import settings
+from app.core.logging import setup_logging, get_logger
 from app.db.session import engine
 from app.models import video
+
+# Setup logging
+setup_logging(level=os.getenv("LOG_LEVEL", "INFO"))
+logger = get_logger(__name__)
+
+logger.info("Starting AI Tennis application...")
+logger.info(f"Environment: {settings.ENVIRONMENT}")
+logger.info(f"Debug mode: {settings.DEBUG}")
 
 # Create necessary directories
 os.makedirs("uploads", exist_ok=True)
 os.makedirs("models", exist_ok=True)
+logger.info("Created necessary directories")
 
 # Create database tables
 video.Base.metadata.create_all(bind=engine)
+logger.info("Database tables created")
 
 app = FastAPI(
     title="AI Tennis API",
