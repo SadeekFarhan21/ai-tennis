@@ -96,6 +96,15 @@ async def readiness_check():
     """Kubernetes-style readiness check"""
     return {"status": "ready"}
 
+@app.on_event("startup")
+async def startup_event():
+    """Application startup event"""
+    logger.info("🚀 AI Tennis application starting up...")
+    logger.info(f"📊 Database URL configured: {bool(settings.DATABASE_URL)}")
+    logger.info(f"🗂️  Upload directory: {settings.UPLOAD_DIR}")
+    logger.info(f"🌍 Environment: {settings.ENVIRONMENT}")
+    logger.info("✅ Application startup completed")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
