@@ -1,6 +1,7 @@
 """
 FastAPI app entry point for AI Tennis application
 """
+import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -11,6 +12,10 @@ from app.api import upload, result
 from app.core.config import settings
 from app.db.session import engine
 from app.models import video
+
+# Create necessary directories
+os.makedirs("uploads", exist_ok=True)
+os.makedirs("models", exist_ok=True)
 
 # Create database tables
 video.Base.metadata.create_all(bind=engine)
@@ -53,7 +58,32 @@ async def result_page(request: Request):
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {"message": "AI Tennis API is running", "version": "1.0.0"}
+    try:
+        # Test database connection
+        from app.db.session import engine
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        
+        return {
+            "message": "AI Tennis API is running",
+            "version": "1.0.0",
+            "status": "healthy",
+            "database": "connected"
+        }
+    except Exception as e:
+        return {
+            "message": "AI Tennis API is running",
+            "version": "1.0.0", 
+            "status": "degraded",
+            "database": "error",
+            "error": str(e)
+        }
+
+@app.get("/ready")
+async def readiness_check():
+    """Kubernetes-style readiness check"""
+    return {"status": "ready"}
 
 if __name__ == "__main__":
     import uvicorn
