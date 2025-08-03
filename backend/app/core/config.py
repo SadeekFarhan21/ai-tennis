@@ -3,7 +3,7 @@ Application configuration and settings
 """
 import os
 from typing import List
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     # AI Processing settings
     AI_MODEL_PATH: str = "./models"
     PROCESSING_TIMEOUT: int = 300  # 5 minutes
+    
+    # Development/Production settings
+    DEBUG: bool = True
+    ENVIRONMENT: str = "development"
     
     class Config:
         env_file = ".env"
