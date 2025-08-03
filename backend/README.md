@@ -23,6 +23,20 @@ A FastAPI-based backend service for AI-powered tennis video analysis. This appli
 
 ## Quick Start
 
+### Python Version Compatibility
+
+**Recommended**: Python 3.11 or 3.12 for full compatibility with all dependencies.
+
+**Python 3.13**: Some ML libraries (like TensorFlow) may not be fully compatible yet. Use the minimal requirements for basic functionality:
+
+```bash
+# For Python 3.13 or quick testing
+pip install -r requirements-minimal.txt
+
+# For full ML features (Python 3.11/3.12 recommended)
+pip install -r requirements.txt
+```
+
 ### Using Docker Compose (Recommended)
 
 1. **Clone and navigate to backend directory**:

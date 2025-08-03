@@ -1,4 +1,4 @@
-# AI Tennis Backend - Python Dependencies
+# AI Tennis - Python Dependencies
 
 # Web Framework
 fastapi==0.115.0
@@ -19,11 +19,10 @@ redis==5.1.1
 pandas>=2.2.0
 numpy>=1.26.0
 
-# AI/ML (for future tennis analysis)
+# AI/ML for tennis analysis
 opencv-python==4.10.0.84
-# Note: TensorFlow compatibility with Python 3.13 may be limited
-# tensorflow==2.17.0  # Uncomment when TensorFlow supports Python 3.13
-# torch==2.4.0  # Alternative: PyTorch (better Python 3.13 support)
+# Note: TensorFlow may have compatibility issues with Python 3.13
+# tensorflow==2.17.0  # Uncomment when available for Python 3.13
 
 # Cloud storage (optional)
 boto3==1.35.0
@@ -40,7 +39,7 @@ jinja2==3.1.4
 # File upload handling
 python-multipart==0.0.12
 
-# HTTP client (for testing)
+# HTTP client
 httpx==0.27.2
 
 # Development dependencies
