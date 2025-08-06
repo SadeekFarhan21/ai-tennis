@@ -1,1 +1,9 @@
+.gitignore
 *.csv
+.DS_Store
+*.log
+*.tmp
+*.bak
+*.swp
+*.pid
+.DS_Store
