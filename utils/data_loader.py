@@ -7,7 +7,7 @@ from typing import Tuple, Dict, Any
 
 
 class MovieLensDataLoader:
-    """Data loader for MovieLens 100K dataset"""
+    """Data loader for MovieLens dataset"""
     
     def __init__(self, data_dir: str = "data"):
         self.data_dir = data_dir
@@ -223,4 +223,4 @@ def get_top_movies_by_rating(movies_df: pd.DataFrame, ratings_df: pd.DataFrame, 
     # Merge with movie information
     top_movies = top_movies.merge(movies_df, on='movieId')
     
-    return top_movies 
+    return top_movies
