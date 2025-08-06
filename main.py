@@ -37,7 +37,22 @@ def main():
         print("\nExample movies:")
         movies_df = data['movies_df']
         for i, (_, movie) in enumerate(movies_df.head(5).iterrows()):
-            print(f"  {i+1}. {movie['title']} ({movie['genres']})")
+            # Get genres for this movie (columns 5-23 are genre columns)
+            genre_cols = [f'genre{j}' for j in range(1, 20)]
+            movie_genres = []
+            for genre_col in genre_cols:
+                if movie[genre_col] == 1:
+                    # Map genre column index to genre name
+                    genre_names = ['unknown', 'action', 'adventure', 'animation', 'children', 
+                                 'comedy', 'crime', 'documentary', 'drama', 'fantasy', 
+                                 'film_noir', 'horror', 'musical', 'mystery', 'romance', 
+                                 'sci_fi', 'thriller', 'war', 'western']
+                    genre_idx = int(genre_col.replace('genre', '')) - 1
+                    if genre_idx < len(genre_names):
+                        movie_genres.append(genre_names[genre_idx])
+            
+            genres_str = ', '.join(movie_genres) if movie_genres else 'unknown'
+            print(f"  {i+1}. {movie['title']} ({genres_str})")
         
         print("\nReady to start building your models!")
         
