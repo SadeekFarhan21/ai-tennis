@@ -77,6 +77,7 @@ def load_data_and_model():
     
     # Load trained weights
     model_path = 'models/pytorch/trained_mf_model.pth'
+
     if os.path.exists(model_path):
         checkpoint = torch.load(model_path, map_location='cpu')
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -138,52 +139,60 @@ if st.button("🎯 Get Recommendations", type="primary"):
             rated_item_ids = list(st.session_state.user_ratings.keys())
             ratings = list(st.session_state.user_ratings.values())
             
-            # Adapt model for new user
+            # Adapt model for new user (more stable hyperparameters)
             user_embedding, user_bias = adapt_new_user(
                 model=model,
                 rated_item_ids=rated_item_ids,
                 ratings=ratings,
                 embedding_dim=64,
-                lr=0.1,
-                steps=100,
-                weight_decay=1e-3
+                lr=0.01,
+                steps=200,
+                weight_decay=1e-2
             )
             
-            # Score all items for this user
-            predictions = score_all_items_for_user(model, user_embedding, user_bias)
-            predictions = predictions.numpy()
+            # Score all items for this user (raw scores for ranking)
+            raw_predictions = score_all_items_for_user(model, user_embedding, user_bias)
+            raw_predictions = raw_predictions.numpy()
             
-            # Ensure predictions are in reasonable range (1-5)
-            predictions = np.clip(predictions, 1.0, 5.0)
+            # Debug: Check raw prediction range
+            st.write(f"Debug - Raw predictions: min={raw_predictions.min():.3f}, max={raw_predictions.max():.3f}, mean={raw_predictions.mean():.3f}")
+            st.write(f"Debug - First 10 raw predictions: {raw_predictions[:10]}")
             
-            # Get top recommendations
+            # Get top recommendations using raw scores (no clipping for ranking)
             # Exclude movies the user already rated
             rated_indices = set(st.session_state.user_ratings.keys())
-            candidate_indices = [i for i in range(len(predictions)) if i not in rated_indices]
-            candidate_predictions = [(i, predictions[i]) for i in candidate_indices]
+            candidate_indices = [i for i in range(len(raw_predictions)) if i not in rated_indices]
+            candidate_predictions = [(i, raw_predictions[i]) for i in candidate_indices]
             candidate_predictions.sort(key=lambda x: x[1], reverse=True)
+            
+            # Clip only for display (stars)
+            display_predictions = np.clip(raw_predictions, 1.0, 5.0)
             
             # Display top 10 recommendations
             st.header("🎬 Your Top Recommendations")
             
-            for i, (movie_idx, predicted_rating) in enumerate(candidate_predictions[:10]):
+            for i, (movie_idx, raw_rating) in enumerate(candidate_predictions[:10]):
                 # Find movie info
                 movie_info = movie_df[movie_df['index'] == movie_idx]
                 if not movie_info.empty:
                     movie = movie_info.iloc[0]
+                    
+                    # Use clipped rating for display only
+                    display_rating = display_predictions[movie_idx]
                     
                     col1, col2, col3 = st.columns([3, 2, 1])
                     with col1:
                         st.write(f"**{i+1}. {movie['title']}**")
                         st.caption(f"Genres: {movie['genres']}")
                     with col2:
-                        st.write(f"Predicted Rating: **{predicted_rating:.1f}/5**")
+                        st.write(f"Predicted Rating: **{display_rating:.1f}/5**")
+                        st.caption(f"Raw score: {raw_rating:.2f}")
                     with col3:
-                        if predicted_rating >= 4.0:
+                        if display_rating >= 4.0:
                             st.success("⭐⭐⭐⭐⭐")
-                        elif predicted_rating >= 3.0:
+                        elif display_rating >= 3.0:
                             st.info("⭐⭐⭐⭐")
-                        elif predicted_rating >= 2.0:
+                        elif display_rating >= 2.0:
                             st.warning("⭐⭐⭐")
                         else:
                             st.error("⭐⭐")

@@ -90,7 +90,7 @@ class MatrixFactorization(nn.Module):
         """Get item embedding"""
         return self.item_embeddings(torch.tensor([item_id]))
 
-def adapt_new_user(model, rated_item_ids, ratings, embedding_dim=64, lr=0.1, steps=100, weight_decay=1e-3):
+def adapt_new_user(model, rated_item_ids, ratings, embedding_dim=64, lr=0.01, steps=200, weight_decay=1e-2):
     """
     Adapt model for a new user with few ratings
     
@@ -111,14 +111,14 @@ def adapt_new_user(model, rated_item_ids, ratings, embedding_dim=64, lr=0.1, ste
     for param in [model.item_embeddings.weight, model.item_biases.weight, model.global_mean]:
         param.requires_grad_(False)
     
-    # Create new user parameters
+    # Create new user parameters (initialize bias closer to user's average)
     user_embedding = nn.Parameter(torch.zeros(embedding_dim))
-    user_bias = nn.Parameter(torch.tensor(0.0))
+    user_bias = nn.Parameter(torch.tensor(np.mean(ratings) - model.global_mean.item()))
     
-    # Optimizer for new user parameters only
+    # Optimizer for new user parameters only (lighter regularization on bias)
     optimizer = torch.optim.Adam([
         {"params": [user_embedding], "weight_decay": weight_decay},
-        {"params": [user_bias], "weight_decay": weight_decay}
+        {"params": [user_bias], "weight_decay": 1e-3}
     ], lr=lr)
     
     # Convert to tensors
@@ -135,8 +135,8 @@ def adapt_new_user(model, rated_item_ids, ratings, embedding_dim=64, lr=0.1, ste
         interaction = (item_emb * user_embedding).sum(dim=-1)  # (n_rated,)
         predictions = model.global_mean + user_bias + item_bias + interaction
         
-        # Compute loss
-        loss = F.mse_loss(predictions, target_ratings)
+        # Compute loss (no clamping - let gradients flow naturally)
+        loss = F.smooth_l1_loss(predictions, target_ratings, beta=1.0)
         
         # Backward pass
         optimizer.zero_grad()
