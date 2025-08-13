@@ -145,6 +145,9 @@ class NeuralCFModel:
         return predictions
         
     def backward(self, grad_output: np.ndarray) -> Dict:
+        # grad_output comes in as (batch,) - reshape to (batch, 1)
+        grad_output = grad_output[:, None]  # (batch, 1)
+        
         # Output layer
         grad_hidden = self.output_layer.backward(grad_output)
         
@@ -201,9 +204,9 @@ def mse_loss(predictions: np.ndarray, targets: np.ndarray) -> Tuple[float, np.nd
     return loss, grad
 
 def add_weight_decay(grads: Dict, params: Dict, weight_decay: float) -> Dict:
-    """Add L2 regularization to gradients"""
+    """Add L2 regularization to gradients (excluding biases)"""
     for name in grads.keys():
-        if grads[name] is not None:
+        if grads[name] is not None and 'bias' not in name:  # skip biases
             grads[name] += weight_decay * params[name]
     return grads
 
