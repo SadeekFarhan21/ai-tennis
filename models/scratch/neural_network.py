@@ -1,7 +1,6 @@
 import numpy as np
 
 
-
 class EmbeddingLayer:
     """Embedding layer for user/item representations"""
     def __init__(self, num_embeddings, embedding_dim):
@@ -17,10 +16,22 @@ class EmbeddingLayer:
         np.add.at(grad_W, self.ids, grad_out)
         return grad_W
     
+"""
+NeuralCF connects all of that together
+Sequential dictates the number of hidden layers 
+DenseLayers count the number of neurons
+ReLU, AdamOptimizer they make the individual neurons
+"""
 
 class DenseLayer:
     def __init__(self) -> None:
         pass
+    def forward(self, x: np.ndarray) -> np.ndarray:
+        return x
+
+    def backward(self, grad_y: np.ndarray) -> np.ndarray:
+
+        return grad_y
 
 class ReLU:
     def __init__(self) -> None:
