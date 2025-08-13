@@ -9,6 +9,7 @@ import json
 import os
 from typing import Dict, List, Tuple
 
+##  Embedding Layer == Converting the user/item IDs into dense vectors
 class EmbeddingLayer:
     """Embedding layer for user/item representations"""
     
@@ -29,6 +30,8 @@ class EmbeddingLayer:
         self.weight_grad = grad_W
         return None
 
+
+## Dense Layer == Fully connected layer usually from the input to the output layer in this case
 class DenseLayer:
     """Dense (fully connected) layer"""
     
@@ -51,6 +54,8 @@ class DenseLayer:
         grad_x = grad_y @ self.weight.T
         return grad_x
 
+## ReLU Layer == Applies the ReLU activation function
+
 class ReLU:
     """ReLU activation function"""
     
@@ -66,6 +71,8 @@ class ReLU:
         # Use pre-activation z for gradient
         return grad_h * (self.z > 0)
 
+
+## Adam Optimizer == Adaptive Moment Estimation
 class AdamOptimizer:
     """Adam optimizer from scratch"""
     
