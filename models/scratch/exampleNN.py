@@ -11,13 +11,14 @@ from typing import Dict, List, Tuple
 
 ##  Embedding Layer == Converting the user/item IDs into dense vectors
 class EmbeddingLayer:
-    """Embedding layer for user/item representations"""
+    """Embedding layer for user/item repr```esentations"""
     
     def __init__(self, num_embeddings: int, embedding_dim: int):
         # Initialize with small random values
         self.weight = np.random.normal(0, 0.01, (num_embeddings, embedding_dim))
         self.ids = None
-        
+    
+    ## Forward Propagation     
     def forward(self, ids: np.ndarray) -> np.ndarray:
         # Cache ids for backward pass
         self.ids = ids
@@ -118,8 +119,12 @@ class NeuralCFModel:
         # Initialize layers
         self.user_embedding = EmbeddingLayer(n_users, embedding_dim)
         self.item_embedding = EmbeddingLayer(n_items, embedding_dim)
-        self.hidden_layer = DenseLayer(2 * embedding_dim, hidden_dim)  # 128 -> 128
-        self.relu = ReLU()
+        # With Sequential - automatic chaining
+        self.network = Sequential(
+            DenseLayer(2 * embedding_dim, hidden_dim),
+            ReLU(),
+            DenseLayer(hidden_dim, 1)
+        )
         self.output_layer = DenseLayer(hidden_dim, 1)  # 128 -> 1
         self.global_bias = 0.0  # Will be set to training mean
         
@@ -144,8 +149,9 @@ class NeuralCFModel:
         hidden = self.relu.forward(hidden_pre)  # (batch, 128)
         
         # Output layer
-        output = self.output_layer.forward(hidden)  # (batch, 1)
-        
+        # output = self.output_layer.forward(hidden)  # (batch, 1)
+        output = self.network.forward(concat)
+
         # Add global bias
         predictions = output.squeeze() + self.global_bias  # (batch,)
         
@@ -376,4 +382,22 @@ def eval(self):
 
 # Add methods to NeuralCFModel class
 NeuralCFModel.train = train
-NeuralCFModel.eval = eval 
+NeuralCFModel.eval = eval
+
+class Sequential:
+    """Sequential container for layers"""
+    
+    def __init__(self, *layers):
+        self.layers = layers  # Store all layers in order
+        
+    def forward(self, x: np.ndarray) -> np.ndarray:
+        # Pass input through each layer sequentially
+        for layer in self.layers:
+            x = layer.forward(x)  # Output of one layer becomes input to next
+        return x
+        
+    def backward(self, grad_y: np.ndarray) -> np.ndarray:
+        # Backpropagate through layers in reverse order
+        for layer in reversed(self.layers):
+            grad_y = layer.backward(grad_y)
+        return grad_y
