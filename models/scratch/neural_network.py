@@ -24,15 +24,28 @@ ReLU, AdamOptimizer they make the individual neurons
 """
 
 class DenseLayer:
+    """Dense layer for fully connected neural networks"""
     def __init__(self, input_dim: int, output_dim: int) -> None:
         self.weight = np.random.normal(0, 0.01, (input_dim, output_dim))
         self.bias = np.zeros(output_dim)
+        self.x = None
 
     def forward(self, x: np.ndarray) -> np.ndarray:
-        return x
+        self.x = x
+        return x @ self.weight + self.bias
 
     def backward(self, grad_y: np.ndarray) -> np.ndarray:
-        return grad_y
+        self.weight_grad = self.x.T @ grad_y
+        self.bias_grad = grad_y.sum(0)
+        grad_x = grad_y @ self.weight.T
+        return grad_x
+
+
+
+
+
+
+
 
 class ReLU:
     def __init__(self) -> None:
