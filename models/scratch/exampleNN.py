@@ -131,7 +131,7 @@ class NeuralCFModel:
         # Cache for backward pass
         self.user_ids = None
         self.item_ids = None
-        
+
     def forward(self, user_ids: np.ndarray, item_ids: np.ndarray) -> np.ndarray:
         # Cache for backward pass
         self.user_ids = user_ids

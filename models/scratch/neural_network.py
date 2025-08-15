@@ -24,13 +24,14 @@ ReLU, AdamOptimizer they make the individual neurons
 """
 
 class DenseLayer:
-    def __init__(self) -> None:
-        pass
+    def __init__(self, input_dim: int, output_dim: int) -> None:
+        self.weight = np.random.normal(0, 0.01, (input_dim, output_dim))
+        self.bias = np.zeros(output_dim)
+
     def forward(self, x: np.ndarray) -> np.ndarray:
         return x
 
     def backward(self, grad_y: np.ndarray) -> np.ndarray:
-
         return grad_y
 
 class ReLU:
