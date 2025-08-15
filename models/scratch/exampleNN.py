@@ -9,6 +9,24 @@ import json
 import os
 from typing import Dict, List, Tuple
 
+class Sequential:
+    """Sequential container for layers"""
+    
+    def __init__(self, *layers):
+        self.layers = layers  # Store all layers in order
+        
+    def forward(self, x: np.ndarray) -> np.ndarray:
+        # Pass input through each layer sequentially
+        for layer in self.layers:
+            x = layer.forward(x)  # Output of one layer becomes input to next
+        return x
+        
+    def backward(self, grad_y: np.ndarray) -> np.ndarray:
+        # Backpropagate through layers in reverse order
+        for layer in reversed(self.layers):
+            grad_y = layer.backward(grad_y)
+        return grad_y
+
 ##  Embedding Layer == Converting the user/item IDs into dense vectors
 class EmbeddingLayer:
     """Embedding layer for user/item repr```esentations"""
@@ -72,6 +90,25 @@ class ReLU:
         # Use pre-activation z for gradient
         return grad_h * (self.z > 0)
 
+class Sigmoid:
+    """Sigmoid activation function"""
+    
+    def __init__(self):
+        self.output = None
+        
+    def forward(self, z: np.ndarray) -> np.ndarray:
+        # Clip to prevent overflow
+        z_clipped = np.clip(z, -500, 500)
+        self.output = 1.0 / (1.0 + np.exp(-z_clipped))
+        return self.output
+        
+    def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        # sigmoid derivative: sigmoid(x) * (1 - sigmoid(x))
+        if self.output is not None:
+            return grad_output * self.output * (1.0 - self.output)
+        else:
+            return grad_output
+
 
 ## Adam Optimizer == Adaptive Moment Estimation
 class AdamOptimizer:
@@ -119,13 +156,20 @@ class NeuralCFModel:
         # Initialize layers
         self.user_embedding = EmbeddingLayer(n_users, embedding_dim)
         self.item_embedding = EmbeddingLayer(n_items, embedding_dim)
-        # With Sequential - automatic chaining
+        
+        # Individual layers for backward compatibility
+        self.hidden_layer = DenseLayer(2 * embedding_dim, hidden_dim)
+        self.relu = ReLU()
+        self.output_layer = DenseLayer(hidden_dim, 1)
+        self.sigmoid = Sigmoid()  # Add sigmoid activation
+        
+        # Sequential network for easy forward pass
         self.network = Sequential(
-            DenseLayer(2 * embedding_dim, hidden_dim),
-            ReLU(),
-            DenseLayer(hidden_dim, 1)
+            self.hidden_layer,
+            self.relu,
+            self.output_layer,
+            self.sigmoid  # Add sigmoid to network
         )
-        self.output_layer = DenseLayer(hidden_dim, 1)  # 128 -> 1
         self.global_bias = 0.0  # Will be set to training mean
         
         # Cache for backward pass
@@ -133,42 +177,47 @@ class NeuralCFModel:
         self.item_ids = None
 
     def forward(self, user_ids: np.ndarray, item_ids: np.ndarray) -> np.ndarray:
-        # Cache for backward pass
-        self.user_ids = user_ids
-        self.item_ids = item_ids
+        """
+        Forward pass of the model
         
+        Args:
+            user_ids: (batch,) user indices  
+            item_ids: (batch,) item indices
+            
+        Returns:
+            predictions: (batch,) predicted ratings in range [1, 5]
+        """
         # Get embeddings
-        user_emb = self.user_embedding.forward(user_ids)  # (batch, 64)
-        item_emb = self.item_embedding.forward(item_ids)  # (batch, 64)
+        user_embeds = self.user_embedding.forward(user_ids)  # (batch, embed_dim)
+        item_embeds = self.item_embedding.forward(item_ids)  # (batch, embed_dim)
         
-        # Concatenate
-        concat = np.concatenate([user_emb, item_emb], axis=1)  # (batch, 128)
+        # Concatenate embeddings
+        concat = np.concatenate([user_embeds, item_embeds], axis=1)  # (batch, 2*embed_dim)
         
-        # Hidden layer + ReLU
-        hidden_pre = self.hidden_layer.forward(concat)  # (batch, 128)
-        hidden = self.relu.forward(hidden_pre)  # (batch, 128)
+        # Pass through network
+        output = self.network.forward(concat)  # (batch, 1)
         
-        # Output layer
-        # output = self.output_layer.forward(hidden)  # (batch, 1)
-        output = self.network.forward(concat)
-
-        # Add global bias
-        predictions = output.squeeze() + self.global_bias  # (batch,)
+        # Apply sigmoid activation to constrain to (0,1)
+        sigmoid_output = 1.0 / (1.0 + np.exp(-output))
+        
+        # Scale sigmoid output from (0,1) to (1,5) rating range
+        scaled_output = 1.0 + 4.0 * sigmoid_output
+        
+        predictions = scaled_output.squeeze()  # (batch,)
         
         return predictions
         
     def backward(self, grad_output: np.ndarray) -> Dict:
-        # grad_output comes in as (batch,) - reshape to (batch, 1)
-        grad_output = grad_output[:, None]  # (batch, 1)
+        # grad_output comes in as (batch,) for the final scaled predictions
+        # We need to backprop through: scaled = 1 + 4 * sigmoid
+        # d(scaled)/d(sigmoid) = 4
         
-        # Output layer
-        grad_hidden = self.output_layer.backward(grad_output)
+        # Scale gradient back through the 1 + 4*sigmoid transformation
+        grad_sigmoid = 4.0 * grad_output  # (batch,)
+        grad_sigmoid = grad_sigmoid[:, None]  # (batch, 1)
         
-        # ReLU (uses cached pre-activation z)
-        grad_hidden_pre = self.relu.backward(grad_hidden)
-        
-        # Hidden layer
-        grad_concat = self.hidden_layer.backward(grad_hidden_pre)
+        # Backward through network (includes sigmoid)
+        grad_concat = self.network.backward(grad_sigmoid)
         
         # Split gradients for embeddings
         grad_user_emb = grad_concat[:, :self.embedding_dim]  # (batch, 64)
@@ -178,7 +227,7 @@ class NeuralCFModel:
         self.user_embedding.backward(grad_user_emb)
         self.item_embedding.backward(grad_item_emb)
         
-        # Collect all gradients
+        # Collect all gradients - access from individual layers
         grads = {
             'user_embedding': self.user_embedding.weight_grad,
             'item_embedding': self.item_embedding.weight_grad,
@@ -189,6 +238,14 @@ class NeuralCFModel:
         }
         
         return grads
+    
+    def train(self):
+        """Set model to training mode"""
+        pass  # No dropout or batch norm in this simple model
+
+    def eval(self):
+        """Set model to evaluation mode"""
+        pass  # No dropout or batch norm in this simple model
     
     def get_params(self) -> Dict:
         """Get all parameters for optimizer"""
@@ -246,9 +303,9 @@ def train_model(model: NeuralCFModel, train_data: Tuple, val_data: Tuple,
     train_users, train_items, train_ratings = train_data
     val_users, val_items, val_ratings = val_data
     
-    # Set global bias to training mean
-    model.global_bias = np.mean(train_ratings)
-    print(f"Global bias (training mean): {model.global_bias:.3f}")
+    # No need to set global bias since we're scaling sigmoid output directly
+    model.global_bias = 0.0
+    print(f"Using direct sigmoid scaling (1 + 4*sigmoid) instead of global bias")
     
     # Initialize optimizer
     params = model.get_params()
@@ -370,34 +427,3 @@ def predict_for_user(model: NeuralCFModel, user_id: int, item_ids: np.ndarray) -
     user_ids = np.full(len(item_ids), user_id)
     predictions = model.forward(user_ids, item_ids)
     return np.clip(predictions, 1.0, 5.0)  # Clip to rating range
-
-# Add train/eval methods to model for convenience
-def train(self):
-    """Set model to training mode"""
-    pass  # No dropout or batch norm in this simple model
-
-def eval(self):
-    """Set model to evaluation mode"""
-    pass  # No dropout or batch norm in this simple model
-
-# Add methods to NeuralCFModel class
-NeuralCFModel.train = train
-NeuralCFModel.eval = eval
-
-class Sequential:
-    """Sequential container for layers"""
-    
-    def __init__(self, *layers):
-        self.layers = layers  # Store all layers in order
-        
-    def forward(self, x: np.ndarray) -> np.ndarray:
-        # Pass input through each layer sequentially
-        for layer in self.layers:
-            x = layer.forward(x)  # Output of one layer becomes input to next
-        return x
-        
-    def backward(self, grad_y: np.ndarray) -> np.ndarray:
-        # Backpropagate through layers in reverse order
-        for layer in reversed(self.layers):
-            grad_y = layer.backward(grad_y)
-        return grad_y

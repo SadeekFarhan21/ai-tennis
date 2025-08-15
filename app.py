@@ -8,6 +8,10 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from utils.simple_data_loader import SimpleMovieLensLoader
 from models.pytorch.matrix_factorization import MatrixFactorization, adapt_new_user, score_all_items_for_user
+from models.scratch.scratch_integration import (
+    load_scratch_model, adapt_new_user_scratch, score_all_items_for_user_scratch, 
+    get_scratch_model_info
+)
 import torch
 import numpy as np
 import pandas as pd
@@ -16,13 +20,46 @@ import pandas as pd
 st.title("🎬 Movie Recommendation System")
 st.markdown("Rate some movies and get personalized recommendations!")
 
-# Sidebar for model info
+# Sidebar for model selection
+st.sidebar.header("🤖 Model Selection")
+model_choice = st.sidebar.radio(
+    "Choose recommendation model:",
+    ["PyTorch Matrix Factorization", "Scratch Neural Network"],
+    help="Select which model to use for generating recommendations"
+)
+
+# Display model info
+st.sidebar.header("ℹ️ Model Info")
+if model_choice == "PyTorch Matrix Factorization":
+    st.sidebar.markdown("""
+    **Matrix Factorization (PyTorch)**
+    - Framework: PyTorch
+    - Architecture: User/Item embeddings + biases
+    - Embedding dimensions: 64
+    - Fast training and inference
+    """)
+else:
+    scratch_info = get_scratch_model_info()
+    st.sidebar.markdown(f"""
+    **{scratch_info['name']}**
+    - Framework: {scratch_info['framework']}
+    - Type: {scratch_info['type']}
+    - {scratch_info['description']}
+    """)
+    with st.sidebar.expander("Architecture Details"):
+        for arch in scratch_info['architecture']:
+            st.markdown(f"• {arch}")
+    with st.sidebar.expander("Features"):
+        for feature in scratch_info['features']:
+            st.markdown(f"• {feature}")
+
+# Sidebar for model info (kept for backward compatibility)
 st.sidebar.header("Model Info")
 
 # Load data and model (with caching)
 @st.cache_data
-def load_data_and_model():
-    """Load movie data and trained model with caching"""
+def load_data_and_models():
+    """Load movie data and both trained models with caching"""
     # Load movie data
     loader = SimpleMovieLensLoader()
     data = loader.process_data(split_id=1, normalize=True)
@@ -54,8 +91,8 @@ def load_data_and_model():
                 '13': 'musical', '14': 'mystery', '15': 'romance', '16': 'sci-fi',
                 '17': 'thriller', '18': 'war', '19': 'western'
             }
-            genre_names_list = [genre_names.get(g, g) for g in genres]
-            genre_str = ', '.join(genre_names_list) if genres else 'Unknown'
+            genre_names_list = [genre_names.get(g, g) for g in genres if g is not None]
+            genre_str = ', '.join(genre_names_list) if genre_names_list else 'Unknown'
             movie_options.append({
                 'movie_id': movie_id,
                 'title': title,
@@ -65,32 +102,56 @@ def load_data_and_model():
     
     movie_df = pd.DataFrame(movie_options)
     
-    # Load trained model
+    # Load PyTorch model
     n_users = data['train_matrix'].shape[0]
     n_items = data['train_matrix'].shape[1]
     
-    model = MatrixFactorization(
+    pytorch_model = MatrixFactorization(
         n_users=n_users,
         n_items=n_items,
         embedding_dim=64
     )
     
-    # Load trained weights
-    model_path = 'models/pytorch/trained_mf_model.pth'
-
-    if os.path.exists(model_path):
-        checkpoint = torch.load(model_path, map_location='cpu')
-        model.load_state_dict(checkpoint['model_state_dict'])
-        model.eval()
-        st.success("✅ Loaded trained Matrix Factorization model!")
-    else:
-        st.warning("⚠️ No trained MF model found. Using random weights.")
+    # Load trained PyTorch weights
+    pytorch_model_path = 'models/pytorch/trained_mf_model.pth'
+    pytorch_loaded = False
     
-    return data, model, movie_df
+    if os.path.exists(pytorch_model_path):
+        checkpoint = torch.load(pytorch_model_path, map_location='cpu')
+        pytorch_model.load_state_dict(checkpoint['model_state_dict'])
+        pytorch_model.eval()
+        pytorch_loaded = True
+    
+    # Load Scratch model
+    scratch_model = None
+    scratch_loaded = False
+    
+    try:
+        scratch_model = load_scratch_model()
+        scratch_loaded = True
+    except FileNotFoundError:
+        pass  # Will show warning in UI
+    
+    return data, pytorch_model, scratch_model, movie_df, pytorch_loaded, scratch_loaded
 
-# Load data
-with st.spinner("Loading data and model..."):
-    data, model, movie_df = load_data_and_model()
+# Load data and models
+with st.spinner("Loading data and models..."):
+    data, pytorch_model, scratch_model, movie_df, pytorch_loaded, scratch_loaded = load_data_and_models()
+
+# Show model loading status
+if model_choice == "PyTorch Matrix Factorization":
+    if pytorch_loaded:
+        st.success("✅ Loaded trained PyTorch Matrix Factorization model!")
+    else:
+        st.warning("⚠️ No trained PyTorch model found. Using random weights.")
+        
+else:  # Scratch Neural Network
+    if scratch_loaded:
+        st.success("✅ Loaded trained Scratch Neural Network model!")
+    else:
+        st.error("❌ No trained Scratch model found. Please train the model first.")
+        st.info("💡 Run the training script: `python models/scratch/train_scratch_nn.py`")
+        st.stop()
 
 # Movie rating section
 st.header("📝 Rate Some Movies")
@@ -134,29 +195,48 @@ if st.button("🎯 Get Recommendations", type="primary"):
         st.error("Please rate at least 3 movies to get recommendations!")
     else:
         with st.spinner("Generating recommendations..."):
-            # Matrix Factorization approach with user adaptation
             # Get user ratings
             rated_item_ids = list(st.session_state.user_ratings.keys())
             ratings = list(st.session_state.user_ratings.values())
             
-            # Adapt model for new user (more stable hyperparameters)
-            user_embedding, user_bias = adapt_new_user(
-                model=model,
-                rated_item_ids=rated_item_ids,
-                ratings=ratings,
-                embedding_dim=64,
-                lr=0.01,
-                steps=200,
-                weight_decay=1e-2
-            )
-            
-            # Score all items for this user (raw scores for ranking)
-            raw_predictions = score_all_items_for_user(model, user_embedding, user_bias)
-            raw_predictions = raw_predictions.numpy()
+            if model_choice == "PyTorch Matrix Factorization":
+                # PyTorch Matrix Factorization approach
+                user_embedding, user_bias = adapt_new_user(
+                    model=pytorch_model,
+                    rated_item_ids=rated_item_ids,
+                    ratings=ratings,
+                    embedding_dim=64,
+                    lr=0.01,
+                    steps=200,
+                    weight_decay=1e-2
+                )
+                
+                # Score all items for this user
+                raw_predictions = score_all_items_for_user(pytorch_model, user_embedding, user_bias)
+                raw_predictions = raw_predictions.numpy()
+                
+            else:  # Scratch Neural Network
+                if scratch_model is None:
+                    st.error("❌ Scratch model not loaded. Cannot generate recommendations.")
+                    st.stop()
+                    
+                # Scratch Neural Network approach
+                user_embedding, user_bias = adapt_new_user_scratch(
+                    model=scratch_model,
+                    rated_item_ids=rated_item_ids,
+                    ratings=ratings,
+                    embedding_dim=64,
+                    lr=0.01,
+                    steps=200,
+                    weight_decay=1e-2
+                )
+                
+                # Score all items for this user
+                raw_predictions = score_all_items_for_user_scratch(scratch_model, user_embedding, user_bias)
             
             # Debug: Check raw prediction range
             st.write(f"Debug - Raw predictions: min={raw_predictions.min():.3f}, max={raw_predictions.max():.3f}, mean={raw_predictions.mean():.3f}")
-            st.write(f"Debug - First 10 raw predictions: {raw_predictions[:10]}")
+            st.write(f"Debug - Model used: {model_choice}")
             
             # Get top recommendations using raw scores (no clipping for ranking)
             # Exclude movies the user already rated
@@ -198,25 +278,47 @@ if st.button("🎯 Get Recommendations", type="primary"):
                             st.error("⭐⭐")
 
 # Model information
-st.sidebar.header("ℹ️ About")
-st.sidebar.markdown("""
-This app uses **Matrix Factorization** to learn user preferences and make movie recommendations.
+st.sidebar.header("📋 About")
+if model_choice == "PyTorch Matrix Factorization":
+    st.sidebar.markdown("""
+    This app uses **Matrix Factorization (PyTorch)** to learn user preferences and make movie recommendations.
 
-**How it works:**
-1. Rate some movies (5-10 recommended)
-2. The model adapts to your taste profile
-3. Predicts ratings for movies you haven't seen
-4. Shows top recommendations
-""")
+    **How it works:**
+    1. Rate some movies (5-10 recommended)
+    2. The model adapts to your taste profile
+    3. Predicts ratings for movies you haven't seen
+    4. Shows top recommendations
+    """)
 
-st.sidebar.markdown("""
-**Matrix Factorization Architecture:**
-- User embeddings: 64 dimensions
-- Item embeddings: 64 dimensions
-- User/item biases for personalization
-- Fast adaptation for new users
-""")
+    st.sidebar.markdown("""
+    **Architecture:**
+    - User embeddings: 64 dimensions
+    - Item embeddings: 64 dimensions
+    - User/item biases for personalization
+    - Fast adaptation for new users
+    """)
+else:
+    st.sidebar.markdown("""
+    This app uses a **Neural Network built from scratch** to learn user preferences and make movie recommendations.
+
+    **How it works:**
+    1. Rate some movies (5-10 recommended)
+    2. The neural network adapts to your taste profile
+    3. Predicts ratings using collaborative filtering
+    4. Shows top recommendations
+    """)
+
+    st.sidebar.markdown("""
+    **Architecture:**
+    - User embeddings: 64 dimensions
+    - Item embeddings: 64 dimensions
+    - Hidden layer: 128 neurons (ReLU)
+    - Pure NumPy implementation
+    """)
 
 # Footer
 st.markdown("---")
-st.markdown("*Built with Streamlit and PyTorch*") 
+if model_choice == "PyTorch Matrix Factorization":
+    st.markdown("*Built with Streamlit and PyTorch*")
+else:
+    st.markdown("*Built with Streamlit and NumPy (Neural Network from Scratch)*") 
