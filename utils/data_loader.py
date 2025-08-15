@@ -25,17 +25,20 @@ class MovieLensDataLoader:
         self.movie_mapping = None
         
     def load_raw_data(self) -> None:
-        """Load raw CSV files from the data directory"""
+        """Load raw data files from the data directory (MovieLens 100K format)"""
         print("Loading raw data...")
         
-        # Load ratings data
-        ratings_path = os.path.join(self.raw_dir, "ratings.csv")
-        self.ratings_df = pd.read_csv(ratings_path)
+        # Load ratings data (tab-separated)
+        ratings_path = os.path.join(self.raw_dir, "u.data")
+        self.ratings_df = pd.read_csv(ratings_path, sep='\t', header=None, 
+                                     names=['userId', 'movieId', 'rating', 'timestamp'])
         print(f"Loaded {len(self.ratings_df)} ratings")
         
-        # Load movies data
-        movies_path = os.path.join(self.raw_dir, "movies.csv")
-        self.movies_df = pd.read_csv(movies_path)
+        # Load movies data (pipe-separated)
+        movies_path = os.path.join(self.raw_dir, "u.item")
+        self.movies_df = pd.read_csv(movies_path, sep='|', header=None, encoding='latin-1',
+                                    names=['movieId', 'title', 'release_date', 'video_release', 
+                                           'IMDb_URL'] + [f'genre{i}' for i in range(1, 20)])
         print(f"Loaded {len(self.movies_df)} movies")
         
         # Create user and movie mappings
@@ -86,11 +89,13 @@ class MovieLensDataLoader:
             if np.any(user_ratings > 0):
                 user_means[i] = np.mean(user_ratings[user_ratings > 0])
         
-        # Subtract user means
+        # Subtract user means ONLY from actual ratings (not zeros)
         normalized_matrix = matrix.copy()
         for i in range(matrix.shape[0]):
             if user_means[i] > 0:
-                normalized_matrix[i, :] -= user_means[i]
+                # Only subtract from positions that have actual ratings
+                mask = matrix[i, :] > 0
+                normalized_matrix[i, mask] -= user_means[i]
         
         return normalized_matrix, user_means
     
@@ -173,17 +178,17 @@ class MovieLensDataLoader:
         # Create rating matrix
         rating_matrix = self.create_rating_matrix()
         
-        # Normalize data
-        normalized_matrix, user_means = self.normalize_data(rating_matrix)
+        # Split data FIRST (before normalization)
+        train_matrix, test_matrix = self.split_data(rating_matrix, test_size, random_state)
         
-        # Split data
-        train_matrix, test_matrix = self.split_data(normalized_matrix, test_size, random_state)
+        # Normalize data AFTER splitting
+        train_normalized, user_means = self.normalize_data(train_matrix)
         
         # Save processed data
-        self.save_processed_data(train_matrix, test_matrix, user_means)
+        self.save_processed_data(train_normalized, test_matrix, user_means)
         
         return {
-            'train_matrix': train_matrix,
+            'train_matrix': train_normalized,
             'test_matrix': test_matrix,
             'user_means': user_means,
             'user_mapping': self.user_mapping,
