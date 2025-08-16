@@ -1,0 +1,15 @@
+[33m65a0dc0[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m HEAD@{0}: commit: Complete neural network from scratch implementation: EmbeddingLayer, DenseLayer, ReLU, Sequential, and AdamOptimizer
+[33mc673424[m HEAD@{1}: commit (merge): My local changes
+[33m2f96bbd[m HEAD@{2}: commit: dense layer
+[33m65da683[m HEAD@{3}: pull: Fast-forward
+[33m96e081d[m HEAD@{4}: reset: moving to HEAD
+[33m96e081d[m HEAD@{5}: commit: Fix neural network from scratch: shape bug in backprop and weight decay on biases
+[33mee280d8[m HEAD@{6}: commit: started neural network from scratch
+[33m2ac2879[m HEAD@{7}: commit: Fix Matrix Factorization adaptation: remove clamping from loss, better bias initialization, rank by raw scores
+[33m1636b78[m HEAD@{8}: commit: feat: Implement Biased Matrix Factorization for MovieLens-100K
+[33m38a308b[m HEAD@{9}: commit: Add PyTorch autoencoder model and training script
+[33m39e2ad8[m HEAD@{10}: commit: feat: implement simplified MovieLens data pipeline using official splits
+[33mf49500f[m HEAD@{11}: pull: Fast-forward
+[33m149e77a[m HEAD@{12}: commit: Data pipeline
+[33mded2b72[m HEAD@{13}: commit: Added file structure
+[33m5842f80[m HEAD@{14}: clone: from https://github.com/SadeekFarhan21/movie-recommendation.git
